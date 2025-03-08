@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+import os
+from argparse import ArgumentParser
+from subprocess import run
+
+def extract(command: str):
+    return lambda : run(command.split())
+
+def main(archive: str, destination: str):
+    archive_extention = archive.split('/')[-1].split('.')[-1]
+
+    params = {
+        '7z'  : extract(f'7z x     {archive} -o {destination}'),
+        'zip' : extract(f'unzip    {archive} -d {destination}'),
+        'rar' : extract(f'unrar x  {archive}    {destination}'),
+        'tgz' : extract(f'tar -xzf {archive} -C {destination}'),
+        'tar' : extract(f'tar -xf  {archive} -C {destination}'),
+        'gz'  : extract(f'tar -xzf {archive} -C {destination}'),
+        'xz'  : extract(f'tar -xJf {archive} -C {destination}'),
+        'bz2' : extract(f'tar -xjf {archive} -C {destination}')
+    }
+
+    if archive_extention in params:
+        params[archive_extention]()
+        return
+    
+    raise KeyError(f"Incorrect archive extention: {archive_extention}")
+
+if __name__ == '__main__':
+    p = ArgumentParser(description='Process two arguments.')
+
+    p.add_argument('archive', type=str, 
+                   help='Archive to extract')
+    
+    p.add_argument('destination', nargs='?', type=str, default='.',
+                   help='Destination to extract to. If empty, output is current directory')
+    
+    args = p.parse_args()
+    
+    # Access arguments
+    main(args.archive, args.destination)

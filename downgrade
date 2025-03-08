@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+import os, subprocess, requests, sys
+from bs4 import BeautifulSoup
+
+def pacman_downgrade(path_or_url: str):
+    subprocess.run(f'sudo pacman -U {path_or_url}'.split())
+
+def find_cached_version(pkg: str, version: str) -> str | None:
+    cache_dir = '/var/cache/pacman/pkg'
+
+    for d in os.listdir(cache_dir):
+        if d.startswith(pkg) and d.lstrip(pkg)[0].isdigit() and (not d.endswith('.sig') and version in d):
+            return os.path.join(cache_dir, d)
+
+def find_remote_version(url: str, version: str) -> str | None:
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        links = soup.find_all('a')
+
+        for link in links:
+            href = link.get('href')
+            if href and (version in href) and not href.endswith('.sig'):
+                return url + '/' + href
+
+    else:
+        print(f"Failed to retrieve the URL. Status code: {response.status_code}")
+
+def main(pkg: str, version: str):
+    package_info = subprocess.run(
+        f"pacman -Q {pkg}",
+        shell=True,
+        text=True,
+        capture_output=True
+    )
+
+    if package_info.returncode != 0:
+        return print(f"Package {pkg} is not installed or does not exist.")
+    
+    current_version = package_info.stdout.split()[-1]
+
+    if version in current_version:
+        return print(f'Provided version "{version}" is currently used ("{current_version}")')
+
+    cached_version = find_cached_version(pkg, version)
+
+    if cached_version:
+        print(f"Found desired version: {cached_version}")
+        pacman_downgrade(cached_version)
+
+    else:
+        base_url = 'https://archive.archlinux.org/packages/'
+        url = base_url + pkg[0] + '/' + pkg
+        found_version_url = find_remote_version(url, version)
+        if found_version_url:
+            print(f"Found desired version: {found_version_url}")
+            pacman_downgrade(found_version_url)
+        else:
+            return print(f"No version {version} found for {pkg}")
+
+if __name__ == '__main__':
+    if len(sys.argv) < 3:
+        print("Usage: downgrade [package] [version]")
+
+    main(sys.argv[1], sys.argv[2])
